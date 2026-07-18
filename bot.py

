@@ -1,18 +1,18 @@
+import os
 import json
 import asyncio
-import os
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pyrogram import Client, filters
 
 # ==========================================
-# Render အား လှည့်စားရန် Web Server အတု ဖန်တီးခြင်း
+# 1. Render အား လှည့်စားရန် Web Server အတု
 # ==========================================
 class DummyHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Bot is alive and running!")
+        self.wfile.write(b"Movie Bot is alive and running!")
 
 def keep_alive():
     port = int(os.environ.get("PORT", 8080))
@@ -22,42 +22,119 @@ def keep_alive():
 threading.Thread(target=keep_alive, daemon=True).start()
 
 # ==========================================
-# Bot Main Code 
+# 2. Configuration & Admin 
 # ==========================================
-# .env (သို့) Render Environment မှ တန်ဖိုးများ ယူခြင်း
-API_ID = int(os.environ.get("API_ID"))
-API_HASH = os.environ.get("API_HASH")
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
+# Render ရဲ့ Environment ကနေ Token တွေ ဆွဲယူခြင်း
+API_ID = int(os.environ.get("API_ID", 0))
+API_HASH = os.environ.get("API_HASH", "")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
+
+# ဤနေရာတွင် သင့် Admin Username ကို သတ်မှတ်ထားပါသည်
+ADMIN_USERNAME = "waiyanphyo99" 
+CHANNELS_FILE = "channels.json"
 
 app = Client("movie_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+admin_filter = filters.user(ADMIN_USERNAME)
 
-# json ဖိုင်မှ Channel List များကို ဖတ်ခြင်း
-def get_channels():
+# ==========================================
+# 3. Channel များကို သိမ်းဆည်းရန် Helper Functions
+# ==========================================
+def load_channels():
+    if not os.path.exists(CHANNELS_FILE):
+        with open(CHANNELS_FILE, "w") as f:
+            json.dump([], f)
+        return []
     try:
-        with open("channels.json", "r") as f:
+        with open(CHANNELS_FILE, "r") as f:
             return json.load(f)
-    except FileNotFoundError:
+    except:
         return []
 
-@app.on_message(filters.command("forward_movie") & filters.user("သင့်ရဲ့Admin_Username"))
-async def auto_forward(client, message):
-    channels = get_channels()
-    if not channels:
-        await message.reply("Channel list အလွတ်ဖြစ်နေပါသည်။")
+def save_channels(channels):
+    with open(CHANNELS_FILE, "w") as f:
+        json.dump(channels, f)
+
+# ==========================================
+# 4. Bot ၏ အဓိက လုပ်ဆောင်ချက်များ (Commands)
+# ==========================================
+
+# (က) /start - အစပြုခြင်း
+@app.on_message(filters.command("start") & admin_filter)
+async def start_bot(client, message):
+    text = (
+        "🎬 **Movie Auto-Forward Bot မှ ကြိုဆိုပါသည်!**\n\n"
+        "အသုံးပြုနိုင်သော Commands များ -\n"
+        "➕ `/add @channel_username` : Channel အသစ်ထည့်ရန်\n"
+        "➖ `/remove @channel_username` : Channel ဖြုတ်ရန်\n"
+        "🚀 `/forward_movie` : ရုပ်ရှင်ပို့ရန် (ရုပ်ရှင် Post ကို Reply ပြန်၍ အသုံးပြုပါ)"
+    )
+    await message.reply(text)
+
+# (ခ) /add - Channel ထည့်ရန်
+@app.on_message(filters.command("add") & admin_filter)
+async def add_channel(client, message):
+    if len(message.command) < 2:
+        await message.reply("⚠️ ကျေးဇူးပြု၍ Channel Username ထည့်ပါ။\nဥပမာ - `/add @my_movie_channel`")
         return
     
-    await message.reply(f"Channel စုစုပေါင်း {len(channels)} ခုသို့ စတင် ပေးပို့နေပါပြီ...")
+    new_channel = message.command[1]
+    channels = load_channels()
     
-    # ရုပ်ရှင် Post ကို Channel များဆီ တစ်ခုပြီးတစ်ခု ပို့ခြင်း
-    for channel_id in channels:
-        try:
-            # message.reply_to_message ကနေတဆင့် ရုပ်ရှင် Post ကို ယူပြီး Forward လုပ်ခြင်း
-            await message.reply_to_message.copy(chat_id=channel_id)
-            await asyncio.sleep(2) # Telegram က Ban မခံရအောင် ၂ စက္ကန့် နားပေးခြင်း
-        except Exception as e:
-            print(f"Error sending to {channel_id}: {e}")
-            
-    await message.reply("✅ Channel အားလုံးသို့ ပေးပို့ပြီးပါပြီ။")
+    if new_channel not in channels:
+        channels.append(new_channel)
+        save_channels(channels)
+        await message.reply(f"✅ {new_channel} ကို စာရင်းထဲသို့ အောင်မြင်စွာ ထည့်သွင်းပြီးပါပြီ။")
+    else:
+        await message.reply(f"⚠️ {new_channel} သည် စာရင်းထဲတွင် ရှိပြီးသား ဖြစ်ပါသည်။")
 
+# (ဂ) /remove - Channel ဖြုတ်ရန်
+@app.on_message(filters.command("remove") & admin_filter)
+async def remove_channel(client, message):
+    if len(message.command) < 2:
+        await message.reply("⚠️ ကျေးဇူးပြု၍ ဖယ်ထုတ်လိုသော Channel Username ထည့်ပါ။\nဥပမာ - `/remove @my_movie_channel`")
+        return
+    
+    remove_ch = message.command[1]
+    channels = load_channels()
+    
+    if remove_ch in channels:
+        channels.remove(remove_ch)
+        save_channels(channels)
+        await message.reply(f"🗑 {remove_ch} ကို စာရင်းမှ ဖယ်ထုတ်ပြီးပါပြီ။")
+    else:
+        await message.reply(f"⚠️ {remove_ch} သည် စာရင်းထဲတွင် မရှိပါ။")
+
+# (ဃ) /forward_movie - ရုပ်ရှင်ပို့ရန်
+@app.on_message(filters.command("forward_movie") & admin_filter)
+async def forward_movie(client, message):
+    if not message.reply_to_message:
+        await message.reply("⚠️ ပေးပို့လိုသော ရုပ်ရှင် Post ကို **Reply ပြန်ပြီးမှ** `/forward_movie` ဟု ရိုက်ပါ။")
+        return
+
+    channels = load_channels()
+    if not channels:
+        await message.reply("⚠️ Channel စာရင်း အလွတ်ဖြစ်နေပါသည်။ အရင်ဆုံး `/add` ဖြင့် Channel များ ထည့်ပါ။")
+        return
+
+    status_msg = await message.reply(f"🚀 Channel စုစုပေါင်း **{len(channels)}** ခုသို့ စတင် ပေးပို့နေပါပြီ...")
+    
+    success = 0
+    failed = 0
+
+    # Channel များဆီသို့ တစ်ခုပြီးတစ်ခု အလှည့်ကျ ပို့ခြင်း
+    for channel in channels:
+        try:
+            await message.reply_to_message.copy(chat_id=channel)
+            success += 1
+            await asyncio.sleep(2) # 🚫 Telegram မှ Ban မခံရစေရန် ၂ စက္ကန့်စီ နားပေးခြင်း
+        except Exception as e:
+            print(f"Error sending to {channel}: {e}")
+            failed += 1
+    
+    await status_msg.edit_text(f"✅ **ပေးပို့ခြင်း ပြီးဆုံးပါပြီ။**\n\nအောင်မြင်: {success} ခု\nမအောင်မြင်: {failed} ခု")
+
+# ==========================================
+# 5. Bot ကို စတင် Run ခြင်း
+# ==========================================
 print("🚀 Movie Bot is starting...")
 app.run()
