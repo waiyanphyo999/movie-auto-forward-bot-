@@ -10,7 +10,7 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN")
 app = Client("movie_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 # json ဖိုင်မှ Channel List များကို ဖတ်ခြင်း
-def get_channels():
+def get_channels()
     try:
         with open("channels.json", "r") as f:
             return json.load(f)
