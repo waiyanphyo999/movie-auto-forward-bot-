@@ -1,8 +1,0 @@
-movie-auto-forward-bot/
-├── bot.py
-├── requirements.txt
-├── render.yaml
-├── logo.png                  ← သင့်ရဲ့ logo ထည့်ပါ
-├── channels.json             ← (optional)
-├── .env                      ← (gitignore ထဲထည့်ပါ)
-└── .gitignore
