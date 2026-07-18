@@ -31,12 +31,11 @@ TARGETS = [
 current_target_index = 0
 last_media_group_id = None
 
-# ================= Logo at Bottom Right =================
+# ================= Logo (Bottom Right) =================
 def replace_logo(photo_path: str, output_path: str):
     try:
         main = Image.open(photo_path).convert("RGBA")
         w, h = main.size
-
         logo_w = int(w * 0.35)
         logo_h = int(h * 0.18)
         x = w - logo_w - 30
@@ -101,12 +100,10 @@ def is_source(_, __, message: Message):
 
 source_filter = filters.create(is_source)
 
-# ================= Start =================
 @app.on_message(filters.private & filters.command("start"))
 async def start_cmd(client, message: Message):
     await message.reply_text("👋 **မင်္ဂလာပါ!** ရုပ်ရှင်များ အလိုအလျောက် ပို့ပေးနေပါသည်။", reply_markup=get_buttons())
 
-# ================= Auto Forward =================
 @app.on_message(source_filter)
 async def auto_forward(client, message: Message):
     global current_target_index, last_media_group_id
@@ -136,5 +133,5 @@ async def auto_forward(client, message: Message):
     except Exception as e:
         print(f"Error: {e}")
 
-print("🚀 Bot Started...")
+print("🚀 Movie Auto Forward Bot Started...")
 app.run()
