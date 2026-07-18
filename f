@@ -1,7 +1,29 @@
 import json
 import asyncio
+import os
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pyrogram import Client, filters
 
+# ==========================================
+# Render အား လှည့်စားရန် Web Server အတု ဖန်တီးခြင်း
+# ==========================================
+class DummyHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is alive and running!")
+
+def keep_alive():
+    port = int(os.environ.get("PORT", 8080))
+    server = HTTPServer(('0.0.0.0', port), DummyHandler)
+    server.serve_forever()
+
+threading.Thread(target=keep_alive, daemon=True).start()
+
+# ==========================================
+# Bot Main Code 
+# ==========================================
 # .env (သို့) Render Environment မှ တန်ဖိုးများ ယူခြင်း
 API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
@@ -10,7 +32,7 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN")
 app = Client("movie_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 # json ဖိုင်မှ Channel List များကို ဖတ်ခြင်း
-def get_channels()
+def get_channels():
     try:
         with open("channels.json", "r") as f:
             return json.load(f)
