@@ -2,5 +2,13 @@
 __pycache__/
 *.pyc
 *.pyo
-*.pyd
-.Python
+*.log
+.local
+.logs
+.config
+.browser_data_dir
+.manus
+.nvm
+.secrets
+upload
+terminal_full_output
