@@ -1,0 +1,141 @@
+import os
+import re
+import asyncio
+import aiohttp
+from PIL import Image, ImageDraw
+from pyrogram import Client, filters
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message
+from pyrogram.errors import FloodWait
+
+# ================= Config =================
+API_ID = int(os.getenv("API_ID"))
+API_HASH = os.getenv("API_HASH")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+ADMIN_IDS = [int(x) for x in os.getenv("ADMIN_IDS", "").split() if x]
+
+SOURCES = [
+    "Worldmovie2001", "paradisechannel2000", "suzukimovies1", "kcinemammsub", 
+    "Channel_Myanmar_MMsub1", "SsMovieMyanmar", "ThidaWanorn", "MYO_ZAW_HTAY_Link", 
+    "moonmmsub", "movieactionzone01", "kksmoviechannel", "CHANNELXMOVIE", 
+    "channelhpmm", "theeastpalace1", "famillymovie1", "love_movie67", "ChoutChar"
+]
+
+TARGETS = [
+    "@allmovie00099", "@chatCGAi", "@channelningo", "@channelhingo", 
+    "@channelaingo", "@channeldogo", "@onepiecemmk", "@chanpingo", "@Cartoonmovie2002"
+]
+
+current_target_index = 0
+last_media_group_id = None
+
+# ================= Logo (Bottom Right) =================
+def replace_logo(photo_path: str, output_path: str):
+    try:
+        main = Image.open(photo_path).convert("RGBA")
+        w, h = main.size
+
+        logo_w = int(w * 0.35)
+        logo_h = int(h * 0.18)
+        x = w - logo_w - 30
+        y = h - logo_h - 30
+
+        draw = ImageDraw.Draw(main)
+        draw.rectangle([x, y, x + logo_w, y + logo_h], fill=(0, 0, 0, 210))
+
+        if os.path.exists("logo.png"):
+            logo = Image.open("logo.png").convert("RGBA")
+            logo.thumbnail((logo_w - 20, logo_h - 20))
+            paste_x = x + (logo_w - logo.width) // 2
+            paste_y = y + (logo_h - logo.height) // 2
+            main.paste(logo, (paste_x, paste_y), logo)
+
+        main.convert("RGB").save(output_path, quality=95)
+        return True
+    except Exception as e:
+        print("Logo Error:", e)
+        return False
+
+# ================= AI Summary =================
+async def generate_ai_summary(text: str) -> str:
+    if not text:
+        return "🎬 New Movie"
+
+    link = re.search(r"https?://t\.me/\S+", text)
+    link = link.group(0) if link else ""
+
+    title = re.search(r"🎬\s*(.+)", text)
+    title = title.group(1).strip() if title else "New Movie"
+
+    prompt = f"အောက်ပါ ရုပ်ရှင်ကို မြန်မာလို ဆွဲဆောင်မှုရှိတဲ့ ဇာတ်လမ်းအကျဉ်း (၃ ကြောင်း) ရေးပေးပါ။ Title: {title}\n\n{text[:1800]}"
+
+    summary = "စိတ်ဝင်စားဖို့ ကောင်းတဲ့ ရုပ်ရှင်တစ်ကားပါ။"
+    if GEMINI_API_KEY:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, json={"contents": [{"parts": [{"text": prompt}]}]}, timeout=12) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        summary = data['candidates'][0]['content']['parts'][0]['text'].strip()
+        except:
+            pass
+
+    final = f"🎬 **{title}**\n\n📝 **ဇာတ်လမ်းအကျဉ်း**\n{summary}\n\n"
+    if link:
+        final += f"👇 **ကြည့်ရန်**\n{link}"
+    return final
+
+def get_buttons():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📺 Main Channel", url="https://t.me/yourmainchannel")],
+        [InlineKeyboardButton("💬 Group", url="https://t.me/yourgroup")]
+    ])
+
+def is_source(_, __, message: Message):
+    if not message.chat: return False
+    username = (message.chat.username or "").replace("@", "").lower()
+    return any(s.lower().replace("@", "") == username for s in SOURCES)
+
+source_filter = filters.create(is_source)
+
+@app.on_message(filters.private & filters.command("start"))
+async def start_cmd(client, message: Message):
+    await message.reply_text("👋 **မင်္ဂလာပါ!** ရုပ်ရှင်များ အလိုအလျောက် ပို့ပေးနေပါသည်။", reply_markup=get_buttons())
+
+@app.on_message(filters.user(ADMIN_IDS) & filters.command("list"))
+async def list_channels(client, message):
+    await message.reply_text(f"**Sources:** {len(SOURCES)}\n**Targets:** {len(TARGETS)}")
+
+@app.on_message(source_filter)
+async def auto_forward(client, message: Message):
+    global current_target_index, last_media_group_id
+    if not TARGETS: return
+
+    try:
+        if message.media_group_id:
+            if message.media_group_id == last_media_group_id:
+                return
+            last_media_group_id = message.media_group_id
+        current_target_index = (current_target_index + 1) % len(TARGETS)
+        target = TARGETS[current_target_index]
+
+        new_caption = await generate_ai_summary(message.caption or message.text or "")
+
+        if message.photo:
+            photo_path = await message.download()
+            output_path = f"processed_{message.id}.jpg"
+            if replace_logo(photo_path, output_path):
+                await client.send_photo(target, output_path, caption=new_caption, reply_markup=get_buttons())
+            else:
+                await client.send_photo(target, photo_path, caption=new_caption, reply_markup=get_buttons())
+            for p in [photo_path, output_path]:
+                if os.path.exists(p): os.remove(p)
+        else:
+            await message.copy(target, caption=new_caption, reply_markup=get_buttons())
+    except Exception as e:
+        print(f"Error: {e}")
+
+print("🚀 Movie Bot Started...")
+app.run()
