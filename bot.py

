@@ -109,6 +109,22 @@ async def auto_forward(client, message: Message):
             await message.copy(target, caption=new_caption, reply_markup=get_buttons())
     except Exception as e:
         print(f"Error: {e}")
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
+import os
+
+class DummyServer(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Movie Bot is live!")
+
+def keep_alive():
+    port = int(os.environ.get("PORT", 8080))
+    server = HTTPServer(('0.0.0.0', port), DummyServer)
+    server.serve_forever()
+
+threading.Thread(target=keep_alive, daemon=True).start()
 
 print("🚀 Bot Started...")
 app.run()
