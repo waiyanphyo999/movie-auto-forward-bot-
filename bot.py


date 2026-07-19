@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import requests
 from pyrogram import Client, filters, compose
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 import google.generativeai as genai
@@ -10,13 +11,16 @@ API_ID = "YOUR_API_ID"                     # ဂဏန်းများ
 API_HASH = "YOUR_API_HASH"                 # စာသားများ
 SESSION_STRING = "YOUR_STRING_SESSION"     # သူများ Channel ဖတ်ရန် (Userbot Session)
 BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"          # ခလုတ်များဖြင့် ထိန်းချုပ်ရန် Bot Token
-ADMIN_ID = 123456789                       # သင့် Telegram ID (သင်ပဲ နှိပ်လို့ရရန်)
+ADMIN_ID = 123456789                       # သင့် Telegram ID 
 DESTINATION_CHANNEL = "@your_myanmar_channel"  # ပြန်တင်မည့် သင့်ကိုယ်ပိုင် Channel
-GEMINI_API_KEY = "YOUR_GEMINI_API_KEY"     # AI ဖြင့် စာသားပြောင်းရန်
 
-# AI အသက်သွင်းခြင်း
+# --- AI API Keys ---
+GEMINI_API_KEY = "YOUR_GEMINI_API_KEY"     # ပထမ ဦးစားပေး AI
+XAI_API_KEY = "YOUR_XAI_API_KEY"           # ဒုတိယ ဦးစားပေး AI (Fallback)
+
+# Gemini AI အသက်သွင်းခြင်း
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-pro')
+gemini_model = genai.GenerativeModel('gemini-pro')
 
 # --- ၂။ Database (Channel စာရင်းသိမ်းရန်) ---
 DB_FILE = "config.json"
@@ -29,20 +33,47 @@ def save_channels(channels):
     with open(DB_FILE, "w") as f: json.dump(channels, f)
 
 # --- ၃။ Clients များ ဖန်တီးခြင်း ---
-# ခလုတ်များပြရန် Bot
 bot_app = Client("control_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
-# စာဖတ်ရန် Userbot
 user_app = Client("userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
 
-# --- AI ဖြင့် စာသားပြောင်းမည့် Function ---
+# --- AI ၂ ခုဖြင့် စာသားပြောင်းမည့် Function ---
 def rewrite_text(original_text):
+    prompt = f"အောက်ပါစာသားကို မြန်မာလိုပဲ အဓိပ္ပာယ်မပြောင်းဘဲ စာသား/အရေးအသား ပုံစံပြောင်းပြီး ပြန်ရေးပေးပါ။ ကြော်ငြာဆန်ဆန် ဆွဲဆောင်မှုရှိအောင် ရေးပေးပါ။:\n\n{original_text}"
+    
+    # ပထမအဆင့်: Gemini ကို အရင်သုံးကြည့်မည်
     try:
-        prompt = f"အောက်ပါစာသားကို မြန်မာလိုပဲ အဓိပ္ပာယ်မပြောင်းဘဲ စာသား/အရေးအသား ပုံစံပြောင်းပြီး ပြန်ရေးပေးပါ။ ကြော်ငြာဆန်ဆန် ဆွဲဆောင်မှုရှိအောင် ရေးပေးပါ။:\n\n{original_text}"
-        response = model.generate_content(prompt)
+        print("Gemini ဖြင့် စာသားပြောင်းနေပါသည်...")
+        response = gemini_model.generate_content(prompt)
         return response.text
-    except Exception as e:
-        print(f"AI Error: {e}")
-        return original_text
+        
+    except Exception as gemini_error:
+        print(f"Gemini Error ဖြစ်သွားပါသည်: {gemini_error}")
+        print("x.ai (Grok) ဖြင့် ပြောင်းလဲရန် ကြိုးစားနေပါသည်...")
+        
+        # ဒုတိယအဆင့်: Gemini အဆင်မပြေပါက x.ai ကို ပြောင်းသုံးမည်
+        try:
+            url = "https://api.x.ai/v1/chat/completions"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {XAI_API_KEY}"
+            }
+            data = {
+                "messages": [
+                    {"role": "system", "content": "You are a helpful assistant that rewrites text attractively in Burmese language."},
+                    {"role": "user", "content": prompt}
+                ],
+                "model": "grok-beta", # x.ai ၏ model နာမည် (လိုအပ်ပါက update လုပ်နိုင်သည်)
+                "temperature": 0.7
+            }
+            xai_response = requests.post(url, headers=headers, json=data)
+            xai_response.raise_for_status() # HTTP error ရှိမရှိ စစ်ဆေးရန်
+            
+            return xai_response.json()['choices'][0]['message']['content']
+            
+        except Exception as xai_error:
+            print(f"x.ai လည်း Error ဖြစ်သွားပါသည်: {xai_error}")
+            # AI နှစ်ခုလုံး Error တက်သွားပါက မူရင်းစာသားကိုသာ ပြန်ပေးမည်
+            return original_text
 
 # ==========================================
 # BOT INTERFACE (ခလုတ်များဖြင့် ထိန်းချုပ်မည့်အပိုင်း)
@@ -57,7 +88,7 @@ def main_menu():
 
 @bot_app.on_message(filters.command("start") & filters.user(ADMIN_ID))
 async def start_cmd(client, message):
-    await message.reply("🤖 **AI Auto-Forward & Rewrite Bot** မှ ကြိုဆိုပါတယ်။\n\nအောက်ပါ ခလုတ်များကို အသုံးပြု၍ ထိန်းချုပ်နိုင်ပါသည်။ 👇", reply_markup=main_menu())
+    await message.reply("🤖 **Dual AI Auto-Forward Bot** မှ ကြိုဆိုပါတယ်။\n\nအောက်ပါ ခလုတ်များကို အသုံးပြု၍ ထိန်းချုပ်နိုင်ပါသည်။ 👇", reply_markup=main_menu())
 
 @bot_app.on_callback_query(filters.user(ADMIN_ID))
 async def callback_handler(client, call):
@@ -107,7 +138,6 @@ async def del_cmd(client, message):
 async def auto_forward_and_rewrite(client, message):
     channels = load_channels()
     
-    # ဝင်လာသော Post သည် သတ်မှတ်ထားသော Channel မှ ဟုတ်မဟုတ် စစ်ဆေးခြင်း
     if message.chat.username:
         chat_username = f"@{message.chat.username}"
         if chat_username in channels:
@@ -121,12 +151,11 @@ async def auto_forward_and_rewrite(client, message):
             elif message.photo or message.video:
                 caption = message.caption if message.caption else ""
                 new_caption = rewrite_text(caption) if caption else ""
-                # မူရင်း Media ကို ယူပြီး AI ပြောင်းထားသော စာသားဖြင့် ပြန်တင်ခြင်း
                 await message.copy(DESTINATION_CHANNEL, caption=new_caption)
 
 # Script တစ်ခုတည်းတွင် Bot နှင့် Userbot နှစ်ခုလုံး တစ်ပြိုင်တည်း Run ရန်
 async def main():
-    print("System is starting... Running both Bot and Userbot on Render.")
+    print("Dual AI System is starting... Running both Bot and Userbot.")
     await compose([bot_app, user_app])
 
 if __name__ == "__main__":
