@@ -1,60 +1,70 @@
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-import google.generativeai as genai
-import asyncio
+import json
+import os
 
-# --- ၁။ Telegram API အချက်အလက်များ ---
-API_ID = "YOUR_API_ID"              # ဂဏန်းများသာ
-API_HASH = "YOUR_API_HASH"          # စာသားများ
-SESSION_STRING = "YOUR_STRING_SESSION" # Render တွင် Run ရန် မဖြစ်မနေ လိုအပ်ပါသည်
+# --- အချက်အလက်များ ---
+API_ID = "YOUR_API_ID"
+API_HASH = "YOUR_API_HASH"
+BOT_TOKEN = "YOUR_BOT_TOKEN_HERE" # ခုနကရတဲ့ Token
+ADMIN_ID = 123456789  # သင့်ရဲ့ Telegram ID (သင်တစ်ယောက်တည်းသာ ထိန်းချုပ်နိုင်ရန်)
 
-# --- ၂။ AI API နှင့် Channel အချက်အလက်များ ---
-GEMINI_API_KEY = "YOUR_GEMINI_API_KEY"
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-pro')
+app = Client("movie_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-SOURCE_CHANNELS = ["@source_channel_1"] # စောင့်ဖတ်မည့် သူများ Channel
-DESTINATION_CHANNEL = "@your_channel"   # ပြန်တင်မည့် သင့် Channel
+# Channel စာရင်းသိမ်းရန်
+DB_FILE = "channels.json"
 
-app = Client("my_bot", session_string=SESSION_STRING, api_id=API_ID, api_hash=API_HASH)
+def load_channels():
+    if not os.path.exists(DB_FILE): return []
+    with open(DB_FILE, "r") as f: return json.load(f)
 
-def rewrite_text(original_text):
-    try:
-        prompt = f"အောက်ပါစာသားကို မြန်မာလိုပဲ အဓိပ္ပာယ်မပြောင်းဘဲ စာသား/အရေးအသား ပုံစံပြောင်းပြီး ပြန်ရေးပေးပါ။ ကြော်ငြာဆန်ဆန် ဆွဲဆောင်မှုရှိအောင် ရေးပေးပါ။:\n\n{original_text}"
-        response = model.generate_content(prompt)
-        return response.text
-    except Exception as e:
-        print(f"AI Error: {e}")
-        return original_text
+def save_channels(channels):
+    with open(DB_FILE, "w") as f: json.dump(channels, f)
 
-@app.on_message(filters.chat(SOURCE_CHANNELS))
-async def forward_and_rewrite(client, message):
-    # --- ခလုတ် (Inline Buttons) ဖန်တီးခြင်း ---
-    reply_markup = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📢 Channel သို့ Join ရန်", url="https://t.me/your_channel")],
-        [InlineKeyboardButton("💬 Admin သို့ ဆက်သွယ်ရန်", url="https://t.me/your_admin_username")]
+# --- ခလုတ်များ (Menu) ---
+def get_main_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📋 ချန်နယ်စာရင်း", callback_data="list")],
+        [InlineKeyboardButton("➕ ချန်နယ်ထည့်ရန်", callback_data="add"), InlineKeyboardButton("➖ ချန်နယ်ဖြုတ်ရန်", callback_data="del")]
     ])
 
-    # စာသားသီးသန့်ဖြစ်လျှင်
-    if message.text:
-        new_text = rewrite_text(message.text)
-        await client.send_message(
-            DESTINATION_CHANNEL, 
-            new_text, 
-            reply_markup=reply_markup # ခလုတ်ထည့်သွင်းခြင်း
-        )
-        
-    # ဓာတ်ပုံ သို့မဟုတ် ဗီဒီယိုဖြစ်လျှင်
-    elif message.photo or message.video:
-        caption = message.caption if message.caption else ""
-        new_caption = rewrite_text(caption) if caption else ""
-        
-        # မူရင်း Media ကိုယူ၍ စာသားအသစ်၊ ခလုတ်အသစ်ဖြင့် တင်ခြင်း
-        await message.copy(
-            DESTINATION_CHANNEL, 
-            caption=new_caption, 
-            reply_markup=reply_markup # ခလုတ်ထည့်သွင်းခြင်း
-        )
+@app.on_message(filters.command("start") & filters.user(ADMIN_ID))
+async def start(client, message):
+    await message.reply("🎬 Movie Auto Forward Bot သို့ ကြိုဆိုပါသည်။ အောက်ပါခလုတ်များဖြင့် အသုံးပြုနိုင်ပါသည်။ 👇", reply_markup=get_main_keyboard())
 
-print("ခလုတ်များပါဝင်သော Userbot စတင် အလုပ်လုပ်နေပါပြီ...")
+# --- Callback Handling (ခလုတ်နှိပ်လျှင်) ---
+@app.on_callback_query()
+async def callback(client, call):
+    if call.data == "list":
+        channels = load_channels()
+        text = "📋 လက်ရှိ ချန်နယ်များ:\n" + "\n".join(channels) if channels else "ချန်နယ်မရှိသေးပါ။"
+        await call.message.edit_text(text, reply_markup=get_main_keyboard())
+    # (Add/Remove အတွက် ပိုမိုရှုပ်ထွေးတဲ့ FSM logic လိုအပ်ပါသည်၊ အလွယ်သုံးရန် command ဖြင့် အစားထိုးနိုင်သည်)
+
+@app.on_message(filters.command("add") & filters.user(ADMIN_ID))
+async def add_channel(client, message):
+    chn = message.command[1]
+    channels = load_channels()
+    if chn not in channels:
+        channels.append(chn)
+        save_channels(channels)
+        await message.reply(f"✅ {chn} ကို ထည့်သွင်းပြီးပါပြီ။")
+
+# --- Movie ပို့စ်တင်ခြင်း (အဓိကအချက်) ---
+@app.on_message(filters.media & filters.user(ADMIN_ID))
+async def forward_movie(client, message):
+    channels = load_channels()
+    if not channels:
+        await message.reply("❌ ချန်နယ်စာရင်း မရှိသေးပါ။")
+        return
+    
+    for chn in channels:
+        try:
+            # Media (ပုံ/ဗီဒီယို) နှင့် စာသားကိုပါ ပို့ပေးမည်
+            await message.copy(chn)
+        except Exception as e:
+            print(f"Error sending to {chn}: {e}")
+    
+    await message.reply(f"✅ ချန်နယ် {len(channels)} ခုသို့ တင်ပေးပြီးပါပြီ။")
+
 app.run()
