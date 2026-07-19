@@ -1,4 +1,4 @@
 pyrogram
 tgcrypto
-pillow
-openai
+google-generativeai
+requests
