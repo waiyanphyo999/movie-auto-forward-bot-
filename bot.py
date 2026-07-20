@@ -1,4 +1,7 @@
 import asyncio
+# ဤလိုင်းသည် Render တွင် Event Loop Error မတက်စေရန် ထည့်ထားခြင်းဖြစ်သည်
+asyncio.set_event_loop(asyncio.new_event_loop())
+
 import os
 import json
 import threading
