@@ -1,159 +1,169 @@
 import asyncio
-import json
 import os
-import requests
-from pyrogram import Client, filters, compose
+import json
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from pyrogram import Client, filters
+from pyrogram.enums import ParseMode
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-import google.generativeai as genai
+from openai import OpenAI
 
-# --- ၁။ Render ၏ Environment Variables မှ အချက်အလက်များ ရယူခြင်း ---
-# (Render တွင် ထည့်ထားသော Key အမည်များနှင့် တစ်ထပ်တည်း ဖြစ်ရပါမည်)
-try:
-    API_ID = int(os.getenv("API_ID"))
-    ADMIN_ID = int(os.getenv("ADMIN_ID"))
-except TypeError:
-    print("❌ Error: API_ID သို့မဟုတ် ADMIN_ID ကို Render တွင် ထည့်ရန် ကျန်နေပါသည် (ဂဏန်းများသာ ဖြစ်ရမည်)")
+# ==========================================
+# 1. Render အတွက် Web Server အတု
+# ==========================================
+class DummyHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Grok AI Movie Bot is Running!")
 
-API_HASH = os.getenv("API_HASH")
-SESSION_STRING = os.getenv("SESSION_STRING")
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-DESTINATION_CHANNEL = os.getenv("DESTINATION_CHANNEL")
+def keep_alive():
+    port = int(os.environ.get("PORT", 8080))
+    server = HTTPServer(('0.0.0.0', port), DummyHandler)
+    server.serve_forever()
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-XAI_API_KEY = os.getenv("XAI_API_KEY")
+threading.Thread(target=keep_alive, daemon=True).start()
 
-# Gemini AI အသက်သွင်းခြင်း
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
-    gemini_model = genai.GenerativeModel('gemini-pro')
+# ==========================================
+# 2. Configuration & Grok Setup
+# ==========================================
+API_ID = int(os.environ.get("API_ID", 0))
+API_HASH = os.environ.get("API_HASH", "")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
+XAI_API_KEY = os.environ.get("XAI_API_KEY", "")
 
-# --- ၂။ Database (Channel စာရင်းသိမ်းရန်) ---
-DB_FILE = "config.json"
+app = Client("ai_movie_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+client_xai = OpenAI(api_key=XAI_API_KEY, base_url="https://api.x.ai/v1")
 
-def load_channels():
-    if not os.path.exists(DB_FILE): return []
-    with open(DB_FILE, "r") as f: return json.load(f)
+DATA_FILE = "bot_data.json"
+user_sessions = {}
 
-def save_channels(channels):
-    with open(DB_FILE, "w") as f: json.dump(channels, f)
-
-# --- ၃။ Clients များ ဖန်တီးခြင်း ---
-bot_app = Client("control_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
-user_app = Client("userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
-
-# --- AI ၂ ခုဖြင့် စာသားပြောင်းမည့် Function ---
-def rewrite_text(original_text):
-    prompt = f"အောက်ပါစာသားကို မြန်မာလိုပဲ အဓိပ္ပာယ်မပြောင်းဘဲ စာသား/အရေးအသား ပုံစံပြောင်းပြီး ပြန်ရေးပေးပါ။ ကြော်ငြာဆန်ဆန် ဆွဲဆောင်မှုရှိအောင် ရေးပေးပါ။:\n\n{original_text}"
-    
+def load_target():
+    if not os.path.exists(DATA_FILE): return None
     try:
-        print("Gemini ဖြင့် စာသားပြောင်းနေပါသည်...")
-        response = gemini_model.generate_content(prompt)
-        return response.text
-    except Exception as gemini_error:
-        print(f"Gemini Error ဖြစ်သွားပါသည်: {gemini_error}")
-        print("x.ai (Grok) ဖြင့် ပြောင်းလဲရန် ကြိုးစားနေပါသည်...")
-        
-        try:
-            url = "https://api.x.ai/v1/chat/completions"
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {XAI_API_KEY}"
-            }
-            data = {
-                "messages": [
-                    {"role": "system", "content": "You are a helpful assistant that rewrites text attractively in Burmese language."},
-                    {"role": "user", "content": prompt}
-                ],
-                "model": "grok-beta",
-                "temperature": 0.7
-            }
-            xai_response = requests.post(url, headers=headers, json=data)
-            xai_response.raise_for_status() 
-            
-            return xai_response.json()['choices'][0]['message']['content']
-        except Exception as xai_error:
-            print(f"x.ai လည်း Error ဖြစ်သွားပါသည်: {xai_error}")
-            return original_text
+        with open(DATA_FILE, "r") as f: return json.load(f).get("target_channel")
+    except: return None
+
+def save_target(channel):
+    with open(DATA_FILE, "w") as f: json.dump({"target_channel": channel}, f)
 
 # ==========================================
-# BOT INTERFACE (ခလုတ်များဖြင့် ထိန်းချုပ်မည့်အပိုင်း)
+# 3. ခလုတ်များပါသော UI (/start)
 # ==========================================
-
-def main_menu():
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📋 စောင့်ကြည့်နေသော Channel များ", callback_data="list_channels")],
-        [InlineKeyboardButton("➕ Channel အသစ်ထည့်ရန်", callback_data="add_channel")],
-        [InlineKeyboardButton("➖ Channel ပြန်ဖျက်ရန်", callback_data="remove_channel")]
-    ])
-
-@bot_app.on_message(filters.command("start") & filters.user(ADMIN_ID))
+@app.on_message(filters.command("start") & filters.private)
 async def start_cmd(client, message):
-    await message.reply("🤖 **Dual AI Auto-Forward Bot** မှ ကြိုဆိုပါတယ်။\n\nအောက်ပါ ခလုတ်များကို အသုံးပြု၍ ထိန်းချုပ်နိုင်ပါသည်။ 👇", reply_markup=main_menu())
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📡 Channel သတ်မှတ်ရန်", callback_data="cmd_set")],
+        [InlineKeyboardButton("🎬 ဇာတ်ကားအသစ် စတင်ရန်", callback_data="cmd_start_post")],
+        [InlineKeyboardButton("✅ အားလုံးပို့ပြီးပါပြီ (/done)", callback_data="cmd_done")],
+        [InlineKeyboardButton("❌ ပယ်ဖျက်မည်", callback_data="cmd_cancel")]
+    ])
+    await message.reply("🎬 **Grok AI Movie Bot**\n\nအောက်ပါခလုတ်များကို အသုံးပြုပါ။", reply_markup=keyboard)
 
-@bot_app.on_callback_query(filters.user(ADMIN_ID))
-async def callback_handler(client, call):
-    data = call.data
-    if data == "list_channels":
-        channels = load_channels()
-        text = "📋 **လက်ရှိ စောင့်ကြည့်နေသော Channel များ:**\n\n" + ("\n".join(channels) if channels else "မည်သည့် Channel မှ မထည့်ရသေးပါ။")
-        await call.message.edit_text(text, reply_markup=main_menu())
-        
-    elif data == "add_channel":
-        await call.message.reply("➕ Channel အသစ်ထည့်ရန် အောက်ပါအတိုင်း ရိုက်ထည့်ပါ။\n\n` /add @channel_username `")
-        
-    elif data == "remove_channel":
-        await call.message.reply("➖ Channel ပြန်ဖျက်ရန် အောက်ပါအတိုင်း ရိုက်ထည့်ပါ။\n\n` /del @channel_username `")
+@app.on_callback_query()
+async def callback_handler(client, query):
+    user_id = query.from_user.id
+    if query.data == "cmd_set":
+        await query.message.reply("ကျေးဇူးပြု၍ `/set_channel @channel_name` ဟု ရိုက်ပေးပါ။")
+    elif query.data == "cmd_start_post":
+        user_sessions[user_id] = {"photo": None, "videos": [], "text": ""}
+        await query.message.reply("✅ **စတင်ပါပြီ။**\n\nသူများ Channel မှ ဇာတ်ကားပုံ၊ ဗီဒီယို နှင့် စာသားများကို ဤ Bot သို့ လွတ်လပ်စွာ **Forward (သို့) Copy ကူးပို့ပါ**။\n\nအကုန်ပို့ပြီးပါက အောက်ပါ **✅ အားလုံးပို့ပြီးပါပြီ** ခလုတ် သို့မဟုတ် `/done` ကိုနှိပ်ပါ။")
+    elif query.data == "cmd_done":
+        await finish_and_post(client, query.message, user_id)
+    elif query.data == "cmd_cancel":
+        if user_id in user_sessions: del user_sessions[user_id]
+        await query.message.reply("❌ လုပ်ဆောင်ဆဲ ဇာတ်ကားကို ပယ်ဖျက်လိုက်ပါပြီ။")
+    await query.answer()
 
-@bot_app.on_message(filters.command("add") & filters.user(ADMIN_ID))
-async def add_cmd(client, message):
-    if len(message.command) > 1:
-        new_channel = message.command[1]
-        channels = load_channels()
-        if new_channel not in channels:
-            channels.append(new_channel)
-            save_channels(channels)
-            await message.reply(f"✅ {new_channel} ကို အောင်မြင်စွာ ထည့်သွင်းပြီးပါပြီ။")
-        else:
-            await message.reply("⚠️ ဤ Channel မှာ စာရင်းထဲတွင် ရှိပြီးသားဖြစ်ပါသည်။")
-    else:
-        await message.reply("အသုံးပြုပုံ မှားယွင်းနေပါသည်။ ဥပမာ - `/add @channel_name`")
-
-@bot_app.on_message(filters.command("del") & filters.user(ADMIN_ID))
-async def del_cmd(client, message):
-    if len(message.command) > 1:
-        target = message.command[1]
-        channels = load_channels()
-        if target in channels:
-            channels.remove(target)
-            save_channels(channels)
-            await message.reply(f"🗑️ {target} ကို စာရင်းမှ ဖျက်လိုက်ပါပြီ။")
-    else:
-        await message.reply("အသုံးပြုပုံ မှားယွင်းနေပါသည်။ ဥပမာ - `/del @channel_name`")
+@app.on_message(filters.command("set_channel") & filters.private)
+async def set_channel_cmd(client, message):
+    if len(message.command) < 2: return await message.reply("ဥပမာ - `/set_channel @my_movies`")
+    save_target(message.command[1])
+    await message.reply(f"✅ Target Channel အား {message.command[1]} သို့ သတ်မှတ်ပြီးပါပြီ။")
 
 # ==========================================
-# USERBOT CORE (စာဖတ်ခြင်း၊ AI ပြောင်းခြင်း၊ ပြန်တင်ခြင်း)
+# 4. သူများ Channel မှ Forward လုပ်သမျှကို ဖမ်းယူခြင်း
 # ==========================================
+@app.on_message(filters.private & ~filters.command(["start", "set_channel", "done", "cancel"]))
+async def capture_media(client, message):
+    user_id = message.from_user.id
+    if user_id not in user_sessions:
+        return await message.reply("⚠️ ပထမဦးစွာ **/start** ကိုနှိပ်၍ '🎬 ဇာတ်ကားအသစ် စတင်ရန်' ခလုတ်ကို အရင်နှိပ်ပါ။")
 
-@user_app.on_message(filters.channel)
-async def auto_forward_and_rewrite(client, message):
-    channels = load_channels()
+    session = user_sessions[user_id]
+
+    if message.photo:
+        session["photo"] = message.photo.file_id
+        if message.caption: session["text"] += f"\n{message.caption}"
+        await message.reply("✅ ပုံ လက်ခံရရှိပါပြီ။")
+    elif message.video or message.document:
+        session["videos"].append(message.id)
+        if message.caption: session["text"] += f"\n{message.caption}"
+        await message.reply(f"✅ ဗီဒီယို/ဖိုင် ({len(session['videos'])}) ခု လက်ခံရရှိပါပြီ။")
+    elif message.text:
+        session["text"] += f"\n{message.text}"
+        await message.reply("✅ စာသား/ဇာတ်လမ်းအကျဉ်း လက်ခံရရှိပါပြီ။")
+
+# ==========================================
+# 5. အားလုံးပို့ပြီး၍ Channel သို့ Auto တင်ခြင်း
+# ==========================================
+@app.on_message(filters.command("done") & filters.private)
+async def done_cmd(client, message):
+    await finish_and_post(client, message, message.from_user.id)
+
+async def finish_and_post(client, message, user_id):
+    if user_id not in user_sessions: 
+        return await message.reply("⚠️ လုပ်ဆောင်ဆဲ Post မရှိပါ။ အသစ်စတင်ရန် ခလုတ်နှိပ်ပါ။")
     
-    if message.chat.username:
-        chat_username = f"@{message.chat.username}"
-        if chat_username in channels:
-            if message.text:
-                new_text = rewrite_text(message.text)
-                await client.send_message(DESTINATION_CHANNEL, new_text)
-                
-            elif message.photo or message.video:
-                caption = message.caption if message.caption else ""
-                new_caption = rewrite_text(caption) if caption else ""
-                await message.copy(DESTINATION_CHANNEL, caption=new_caption)
+    target_channel = load_target()
+    if not target_channel: 
+        return await message.reply("⚠️ Channel မသတ်မှတ်ရသေးပါ။ `/set_channel @yourchannel` အရင်လုပ်ပါ။")
 
-# Script တစ်ခုတည်းတွင် Bot နှင့် Userbot နှစ်ခုလုံး တစ်ပြိုင်တည်း Run ရန်
-async def main():
-    print("Dual AI System is starting... Running both Bot and Userbot from Render Environment Variables.")
-    await compose([bot_app, user_app])
+    session = user_sessions[user_id]
+    if not session["photo"]: return await message.reply("⚠️ ဇာတ်ကားပုံ မပါသေးပါ။ ပုံအရင်ပို့ပေးပါ။")
+    if not session["videos"]: return await message.reply("⚠️ ဗီဒီယို တစ်ခုမှ မပါသေးပါ။ ဗီဒီယိုအရင်ပို့ပေးပါ။")
 
-if __name__ == "__main__":
-    asyncio.run(main())
+    status_msg = await message.reply("⏳ Grok AI ဖြင့် ဇာတ်ညွှန်းရေးဆွဲကာ Channel သို့ တင်နေပါသည်... ခဏစောင့်ပါ။")
+
+    try:
+        video_links = []
+        for i, vid_msg_id in enumerate(session["videos"]):
+            sent_vid = await client.copy_message(chat_id=target_channel, from_chat_id=user_id, message_id=vid_msg_id)
+            video_links.append(f"အပိုင်း ({i+1}) - 🔗 {sent_vid.link}")
+            await asyncio.sleep(2)
+
+        formatted_links = "\n".join(video_links)
+        original_text = session["text"].strip() or "No info provided."
+
+        prompt = f"""
+        Based on the following forwarded movie info: "{original_text}"
+        Write a new, clean Telegram movie post in Burmese language.
+        Format exactly like this using HTML tags:
+
+        <blockquote>[Movie Name or Genre] ❞</blockquote>
+        [1 or 2 catchy sentences introducing the movie in Burmese]
+
+        <blockquote>ဇာတ်လမ်းအကျဉ်း: [A short, engaging synopsis in Burmese]</blockquote>
+
+        <blockquote>👇 အောက်က Link မှာ ဝင်ရောက်ကြည့်ရှုလိုက်ပါ 👇
+        {formatted_links}</blockquote>
+        """
+        
+        completion = client_xai.chat.completions.create(
+            model="grok-beta",
+            messages=[
+                {"role": "system", "content": "You are a professional movie channel admin. Output raw HTML only without ```html."},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        ai_caption = completion.choices[0].message.content.strip()
+
+        await client.send_photo(chat_id=target_channel, photo=session["photo"], caption=ai_caption, parse_mode=ParseMode.HTML)
+        del user_sessions[user_id]
+        await status_msg.edit_text("✅ သင့် Channel သို့ အောင်မြင်စွာ တင်ပြီးပါပြီ! 🎉")
+        
+    except Exception as e:
+        await status_msg.edit_text(f"❌ အမှားအယွင်းဖြစ်ပွားခဲ့ပါသည်: {e}")
+
+print("🚀 Grok AI Forwarding Movie Bot is starting...")
+app.run()
