@@ -1,82 +1,142 @@
 import asyncio
-# Render အတွက် Event Loop ပြဿနာ မဖြစ်စေရန်
 asyncio.set_event_loop(asyncio.new_event_loop())
 
-import json
 import os
-import requests
-from aiohttp import web
+import re
+import json
+import aiohttp
+from PIL import Image, ImageDraw
+from pyrogram import Client, filters
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message
+from pyrogram.errors import FloodWait
 
-from pyrogram import Client, filters, compose
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-import google.generativeai as genai
-
-# ==========================================
-# ENVIRONMENT VARIABLES
-# ==========================================
-
-API_ID = int(os.getenv("API_ID", "0"))
+# ================= Config =================
+API_ID = int(os.getenv("API_ID"))
 API_HASH = os.getenv("API_HASH")
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-SESSION_STRING = os.getenv("SESSION_STRING")
-
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# ==========================================
-# CHECK REQUIRED VARIABLES
-# ==========================================
+ADMIN_IDS = [int(x) for x in os.getenv("ADMIN_IDS", "").split() if x]
 
-if not API_ID:
-    raise Exception("Missing API_ID")
-if not API_HASH:
-    raise Exception("Missing API_HASH")
-if not BOT_TOKEN:
-    raise Exception("Missing BOT_TOKEN")
-if not SESSION_STRING:
-    raise Exception("Missing SESSION_STRING")
+# ================= Channels =================
+SOURCES = [
+    "Worldmovie2001", "paradisechannel2000", "suzukimovies1", "kcinemammsub", 
+    "Channel_Myanmar_MMsub1", "SsMovieMyanmar", "ThidaWanorn", "MYO_ZAW_HTAY_Link", 
+    "moonmmsub", "movieactionzone01", "kksmoviechannel", "CHANNELXMOVIE", 
+    "channelhpmm", "theeastpalace1", "famillymovie1", "love_movie67", "ChoutChar"
+]
 
-# ==========================================
-# AI SETUP
-# ==========================================
+TARGETS = [
+    "@allmovie00099", "@chatCGAi", "@channelningo", "@channelhingo", 
+    "@channelaingo", "@channeldogo", "@onepiecemmk", "@chanpingo", "@Cartoonmovie2002"
+]
 
-gemini_model = None
-if GEMINI_API_KEY:
+current_target_index = 0
+last_media_group_id = None
+
+# ================= Logo Replace (Bottom Right) =================
+def replace_logo(photo_path: str, output_path: str):
     try:
-        genai.configure(api_key=GEMINI_API_KEY)
-        gemini_model = genai.GenerativeModel("gemini-1.5-flash")
+        main = Image.open(photo_path).convert("RGBA")
+        w, h = main.size
+        logo_w = int(w * 0.35)
+        logo_h = int(h * 0.18)
+        x = w - logo_w - 30
+        y = h - logo_h - 30
+
+        draw = ImageDraw.Draw(main)
+        draw.rectangle([x, y, x + logo_w, y + logo_h], fill=(0, 0, 0, 210))
+
+        if os.path.exists("logo.png"):
+            logo = Image.open("logo.png").convert("RGBA")
+            logo.thumbnail((logo_w - 20, logo_h - 20))
+            paste_x = x + (logo_w - logo.width) // 2
+            paste_y = y + (logo_h - logo.height) // 2
+            main.paste(logo, (paste_x, paste_y), logo)
+
+        main.convert("RGB").save(output_path, quality=95)
+        return True
     except Exception as e:
-        print("Gemini Error:", e)
+        print("Logo Error:", e)
+        return False
 
-def rewrite_text(text):
+# ================= AI Summary =================
+async def generate_ai_summary(text: str) -> str:
     if not text:
-        return ""
-    prompt = f"""
-အောက်ပါစာသားကို မြန်မာလိုပဲ အဓိပ္ပာယ်မပြောင်းဘဲ ပိုမိုဆွဲဆောင်မှုရှိအောင် ပြန်ရေးပေးပါ။
+        return "🎬 New Movie"
 
-{text}
-"""
-    if gemini_model:
+    link = re.search(r"https?://t\.me/\S+", text)
+    link = link.group(0) if link else ""
+
+    title = re.search(r"🎬\s*(.+)", text)
+    title = title.group(1).strip() if title else "New Movie"
+
+    prompt = f"အောက်ပါ ရုပ်ရှင်ကို မြန်မာလို ဆွဲဆောင်မှုရှိတဲ့ ဇာတ်လမ်းအကျဉ်း (၃ ကြောင်း) ရေးပေးပါ။ Title: {title}\n\n{text[:1800]}"
+
+    summary = "စိတ်ဝင်စားဖို့ ကောင်းတဲ့ ရုပ်ရှင်တစ်ကားပါ။"
+
+    if GEMINI_API_KEY:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
         try:
-            result = gemini_model.generate_content(prompt)
-            return result.text
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, json={"contents": [{"parts": [{"text": prompt}]}]}, timeout=15) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        summary = data['candidates'][0]['content']['parts'][0]['text'].strip()
         except Exception as e:
             print("Gemini Error:", e)
-    return text
 
-# ==========================================
-# DATABASE
-# ==========================================
+    final = f"🎬 **{title}**\n\n📝 **ဇာတ်လမ်းအကျဉ်း**\n{summary}\n\n"
+    if link:
+        final += f"👇 **ကြည့်ရန်**\n{link}"
+    return final
 
-DB_FILE = "config.json"
+def get_buttons():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📺 Main Channel", url="https://t.me/yourmainchannel")],
+        [InlineKeyboardButton("💬 Group", url="https://t.me/yourgroup")]
+    ])
 
-def load_channels():
-    if not os.path.exists(DB_FILE):
-        return []
+def is_source(_, __, message: Message):
+    if not message.chat: return False
+    username = (message.chat.username or "").replace("@", "").lower()
+    return any(s.lower().replace("@", "") == username for s in SOURCES)
+
+source_filter = filters.create(is_source)
+
+# ================= Handlers =================
+@app.on_message(filters.private & filters.command("start"))
+async def start_cmd(client, message: Message):
+    await message.reply_text("👋 **မင်္ဂလာပါ!** ရုပ်ရှင်များ အလိုအလျောက် ပို့ပေးနေပါသည်။", reply_markup=get_buttons())
+
+@app.on_message(source_filter)
+async def auto_forward(client, message: Message):
+    global current_target_index, last_media_group_id
+    if not TARGETS: return
+
     try:
-        with open(DB_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except:
-        return []
+        if message.media_group_id:
+            if message.media_group_id == last_media_group_id:
+                return
+            last_media_group_id = message.media_group_id
+        current_target_index = (current_target_index + 1) % len(TARGETS)
+        target = TARGETS[current_target_index]
 
-def save_channels(data):
-    with open(DB
+        new_caption = await generate_ai_summary(message.caption or message.text or "")
+
+        if message.photo:
+            photo_path = await message.download()
+            output_path = f"processed_{message.id}.jpg"
+            if replace_logo(photo_path, output_path):
+                await client.send_photo(target, output_path, caption=new_caption, reply_markup=get_buttons())
+            else:
+                await client.send_photo(target, photo_path, caption=new_caption, reply_markup=get_buttons())
+            for p in [photo_path, output_path]:
+                if os.path.exists(p): os.remove(p)
+        else:
+            await message.copy(target, caption=new_caption, reply_markup=get_buttons())
+    except Exception as e:
+        print(f"Error: {e}")
+
+print("🚀 Movie Auto Forward Bot Started...")
+app.run()
