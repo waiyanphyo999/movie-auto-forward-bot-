@@ -135,8 +135,7 @@ movie_states = {}
 # ==========================================
 async def start_web_server():
     async def handle(request):
-
-return web.Response(text="Movie Bot is Running Successfully!")
+        return web.Response(text="Movie Bot is Running Successfully!")
     
     app = web.Application()
     app.router.add_get("/", handle)
@@ -306,7 +305,7 @@ async def main():
     await start_web_server()
     await compose([bot_app, user_app])
 
-if name == "main":
+if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     try:
         loop.run_until_complete(main())
