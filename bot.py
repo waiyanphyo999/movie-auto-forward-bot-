@@ -1,4 +1,3 @@
-တစ်ကိုယ်ရည်အားဖြေခြင်း:
 import asyncio
 # Render တွင် Event Loop Error မတက်စေရန် Pyrogram မတိုင်မီ အရင်ဆုံး ရေးရပါမည်
 asyncio.set_event_loop(asyncio.new_event_loop())
