@@ -142,7 +142,7 @@ def load_destination():
 def save_destination(channel):
     with open(SETTING_FILE, "w", encoding="utf-8") as f:
         json.dump({"destination_channel": channel}, f, ensure_ascii=False, indent=2)
-bot_app = Client("control_bot", id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+
 
 bot_app = Client("control_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user_app = Client("userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
