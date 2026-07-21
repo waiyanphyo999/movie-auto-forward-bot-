@@ -64,9 +64,9 @@ def rewrite_text(text):
     if not text:
         return ""
     prompt = f"""
-အောက်ပါစာသားကို မြန်မာလိုပဲ
-အဓိပ္ပာယ်မပြောင်းဘဲ
-ပိုမိုဆွဲဆောင်မှုရှိအောင် ပြန်ရေးပါ။
+á€¡á€±á€¬á€€á€ºá€•á€«á€…á€¬á€žá€¬á€¸á€€á€­á€¯ á€™á€¼á€”á€ºá€™á€¬á€œá€­á€¯á€•á€²
+á€¡á€“á€­á€•á€¹á€•á€¬á€šá€ºá€™á€•á€¼á€±á€¬á€„á€ºá€¸á€˜á€²
+á€•á€­á€¯á€™á€­á€¯á€†á€½á€²á€†á€±á€¬á€„á€ºá€™á€¾á€¯á€›á€¾á€­á€¡á€±á€¬á€„á€º á€•á€¼á€”á€ºá€›á€±á€¸á€•á€«á‹
 
 {text}
 """
@@ -163,7 +163,7 @@ async def start_web_server():
     port = int(os.environ.get("PORT", 10000))
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
-    print(f"✅ Web Server started on port {port}")
+    print(f"âœ… Web Server started on port {port}")
 
 
 # ==========================================
@@ -174,13 +174,13 @@ def main_menu():
     current_dest = load_destination()
     dest_text = str(current_dest) if current_dest else "Not Set"
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🎬 Movie အသစ်တင်ရန်", callback_data="start_movie")],
-        [InlineKeyboardButton("📋 သူများ Source Channels များကိုကြည့်ရန်", callback_data="list_channels")],
+        [InlineKeyboardButton("ðŸŽ¬ Movie á€¡á€žá€…á€ºá€á€„á€ºá€›á€”á€º", callback_data="start_movie")],
+        [InlineKeyboardButton("ðŸ“‹ á€žá€°á€™á€»á€¬á€¸ Source Channels á€™á€»á€¬á€¸á€€á€­á€¯á€€á€¼á€Šá€·á€ºá€›á€”á€º", callback_data="list_channels")],
         [
-            InlineKeyboardButton("➕ Add Source", callback_data="add_channel"),
-            InlineKeyboardButton("➖ Del Source (Channel ထုတ်ရန်)", callback_data="remove_channel")
+            InlineKeyboardButton("âž• Add Source", callback_data="add_channel"),
+            InlineKeyboardButton("âž– Del Source (Channel á€‘á€¯á€á€ºá€›á€”á€º)", callback_data="remove_channel")
         ],
-        [InlineKeyboardButton(f"🎯 ကျနော့် Channel ကြည့်ရန်/ပြောင်းရန်: {dest_text}", callback_data="set_destination")]
+        [InlineKeyboardButton(f"ðŸŽ¯ á€€á€»á€”á€±á€¬á€·á€º Channel á€€á€¼á€Šá€·á€ºá€›á€”á€º/á€•á€¼á€±á€¬á€„á€ºá€¸á€›á€”á€º: {dest_text}", callback_data="set_destination")]
     ])
 
 
@@ -194,7 +194,7 @@ def channel_keyboard(prefix, channels):
             row = []
     if row:
         buttons.append(row)
-    buttons.append([InlineKeyboardButton("🔙 Main Menu သို့", callback_data="back_home")])
+    buttons.append([InlineKeyboardButton("ðŸ”™ Main Menu á€žá€­á€¯á€·", callback_data="back_home")])
     return InlineKeyboardMarkup(buttons)
 
 
@@ -206,7 +206,9 @@ def channel_keyboard(prefix, channels):
 async def start(client, message):
     admin_input_states.pop(ADMIN_ID, None)
     await message.reply(
-        "🤖 **Movie Auto Bot Control Panel**\n\nအောက်ပါ ခလုတ်များမှတစ်ဆင့် လိုအပ်သည်များကို စီမံနိုင်ပါသည် -",
+        "ðŸ¤– **Movie Auto Bot Control Panel**
+
+á€¡á€±á€¬á€€á€ºá€•á€« á€á€œá€¯á€á€ºá€™á€»á€¬á€¸á€™á€¾á€á€…á€ºá€†á€„á€·á€º á€œá€­á€¯á€¡á€•á€ºá€žá€Šá€ºá€™á€»á€¬á€¸á€€á€­á€¯ á€…á€®á€™á€¶á€”á€­á€¯á€„á€ºá€•á€«á€žá€Šá€º -",
         reply_markup=main_menu()
     )
 
@@ -222,32 +224,39 @@ async def buttons(client, query):
     if data == "back_home":
         admin_input_states.pop(ADMIN_ID, None)
         await query.message.edit_text(
-            "🤖 **Movie Auto Bot Control Panel**\n\nအောက်ပါ ခလုတ်များမှတစ်ဆင့် လိုအပ်သည်များကို စီမံနိုင်ပါသည် -",
+            "ðŸ¤– **Movie Auto Bot Control Panel**
+
+á€¡á€±á€¬á€€á€ºá€•á€« á€á€œá€¯á€á€ºá€™á€»á€¬á€¸á€™á€¾á€á€…á€ºá€†á€„á€·á€º á€œá€­á€¯á€¡á€•á€ºá€žá€Šá€ºá€™á€»á€¬á€¸á€€á€­á€¯ á€…á€®á€™á€¶á€”á€­á€¯á€„á€ºá€•á€«á€žá€Šá€º -",
             reply_markup=main_menu()
         )
 
     elif data == "list_channels":
         channels = load_channels()
-        text = "📋 **သူများ Source Channels စာရင်းများ:**\n\n" + ("\n".join(f"• {ch}" for ch in channels) if channels else "⚠️ ထည့်ထားသော Channel တစ်ခုမှ မရှိသေးပါ။")
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="back_home")]])
+        text = "ðŸ“‹ **á€žá€°á€™á€»á€¬á€¸ Source Channels á€…á€¬á€›á€„á€ºá€¸á€™á€»á€¬á€¸:**
+
+" + ("
+".join(f"â€¢ {ch}" for ch in channels) if channels else "âš ï¸ á€‘á€Šá€·á€ºá€‘á€¬á€¸á€žá€±á€¬ Channel á€á€…á€ºá€á€¯á€™á€¾ á€™á€›á€¾á€­á€žá€±á€¸á€•á€«á‹")
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("ðŸ”™ Back", callback_data="back_home")]])
         await query.message.edit_text(text, reply_markup=kb)
 
     elif data == "add_channel":
         admin_input_states[ADMIN_ID] = "waiting_add_source"
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel", callback_data="back_home")]])
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("âŒ Cancel", callback_data="back_home")]])
         await query.message.edit_text(
-            "➕ **Source Channel အသစ်ထည့်ရန်**\n\nထည့်လိုသော Channel Username (သို့) ID ကို ပို့ပေးပါ (ဥပမာ: `@source_channel`):",
+            "âž• **Source Channel á€¡á€žá€…á€ºá€‘á€Šá€·á€ºá€›á€”á€º**
+
+á€‘á€Šá€·á€ºá€œá€­á€¯á€žá€±á€¬ Channel Username (á€žá€­á€¯á€·) ID á€€á€­á€¯ á€•á€­á€¯á€·á€•á€±á€¸á€•á€« (á€¥á€•á€™á€¬: `@source_channel`):",
             reply_markup=kb
         )
 
     elif data == "remove_channel":
         channels = load_channels()
         if not channels:
-            kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="back_home")]])
-            return await query.message.edit_text("⚠️ ဖြတ်ထုတ်ရန် Channel တစ်ခုမှ မရှိသေးပါ။", reply_markup=kb)
+            kb = InlineKeyboardMarkup([[InlineKeyboardButton("ðŸ”™ Back", callback_data="back_home")]])
+            return await query.message.edit_text("âš ï¸ á€–á€¼á€á€ºá€‘á€¯á€á€ºá€›á€”á€º Channel á€á€…á€ºá€á€¯á€™á€¾ á€™á€›á€¾á€­á€žá€±á€¸á€•á€«á‹", reply_markup=kb)
         
         await query.message.edit_text(
-            "🗑 **ထုတ်ပစ်လိုသော Source Channel ကို ရွေးပါ -**",
+            "ðŸ—‘ **á€‘á€¯á€á€ºá€•á€…á€ºá€œá€­á€¯á€žá€±á€¬ Source Channel á€€á€­á€¯ á€›á€½á€±á€¸á€•á€« -**",
             reply_markup=channel_keyboard("del_ch", channels)
         )
 
@@ -257,34 +266,38 @@ async def buttons(client, query):
         if idx < len(channels):
             removed = channels.pop(idx)
             save_channels(channels)
-            await query.answer(f"🗑 ထုတ်ပစ်လိုက်ပါပြီ: {removed}", show_alert=True)
+            await query.answer(f"ðŸ—‘ á€‘á€¯á€á€ºá€•á€…á€ºá€œá€­á€¯á€€á€ºá€•á€«á€•á€¼á€®: {removed}", show_alert=True)
         
         channels = load_channels()
         if not channels:
-            kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="back_home")]])
-            await query.message.edit_text("📋 Source Channels စာရင်း ယခု ပස්စပ်သွားပါပြီ (Empty)။", reply_markup=kb)
+            kb = InlineKeyboardMarkup([[InlineKeyboardButton("ðŸ”™ Back", callback_data="back_home")]])
+            await query.message.edit_text("ðŸ“‹ Source Channels á€…á€¬á€›á€„á€ºá€¸ á€šá€á€¯ á€•à·ƒà·Šá€…á€•á€ºá€žá€½á€¬á€¸á€•á€«á€•á€¼á€® (Empty)á‹", reply_markup=kb)
         else:
             await query.message.edit_text(
-                "🗑 **ထုတ်ပစ်လိုသော Source Channel ကို ထပ်မံရွေးပါ -**",
+                "ðŸ—‘ **á€‘á€¯á€á€ºá€•á€…á€ºá€œá€­á€¯á€žá€±á€¬ Source Channel á€€á€­á€¯ á€‘á€•á€ºá€™á€¶á€›á€½á€±á€¸á€•á€« -**",
                 reply_markup=channel_keyboard("del_ch", channels)
             )
 
     elif data == "set_destination":
         admin_input_states[ADMIN_ID] = "waiting_destination"
         current_dest = load_destination()
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel", callback_data="back_home")]])
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("âŒ Cancel", callback_data="back_home")]])
         await query.message.edit_text(
-            f"🎯 **ကျနော့် Channel (Destination Channel) ချိတ်ရန်/ပြောင်းရန်**\n\nလက်ရှိ Channel: `{current_dest}`\n\nအသစ်ပြောင်းလိုပါက Channel ၏ Username (သို့) ID ကို ပို့ပေးပါ (ဥပမာ: `@my_channel` သို့မဟုတ် `-100xxxxxxxx`):",
+            f"ðŸŽ¯ **á€€á€»á€”á€±á€¬á€·á€º Channel (Destination Channel) á€á€»á€­á€á€ºá€›á€”á€º/á€•á€¼á€±á€¬á€„á€ºá€¸á€›á€”á€º**
+
+á€œá€€á€ºá€›á€¾á€­ Channel: `{current_dest}`
+
+á€¡á€žá€…á€ºá€•á€¼á€±á€¬á€„á€ºá€¸á€œá€­á€¯á€•á€«á€€ Channel á Username (á€žá€­á€¯á€·) ID á€€á€­á€¯ á€•á€­á€¯á€·á€•á€±á€¸á€•á€« (á€¥á€•á€™á€¬: `@my_channel` á€žá€­á€¯á€·á€™á€Ÿá€¯á€á€º `-100xxxxxxxx`):",
             reply_markup=kb
         )
 
     elif data == "start_movie":
         channels = load_channels()
         if not channels:
-            kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="back_home")]])
-            return await query.message.edit_text("⚠️ ပထမဆုံး Source Channel တစ်ခုခုကို အရင်ထည့်ပါ။", reply_markup=kb)
+            kb = InlineKeyboardMarkup([[InlineKeyboardButton("ðŸ”™ Back", callback_data="back_home")]])
+            return await query.message.edit_text("âš ï¸ á€•á€‘á€™á€†á€¯á€¶á€¸ Source Channel á€á€…á€ºá€á€¯á€á€¯á€€á€­á€¯ á€¡á€›á€„á€ºá€‘á€Šá€·á€ºá€•á€«á‹", reply_markup=kb)
         await query.message.edit_text(
-            "📸 **Poster တင်မည့် Channel ကို ရွေးပါ -**",
+            "ðŸ“¸ **Poster á€á€„á€ºá€™á€Šá€·á€º Channel á€€á€­á€¯ á€›á€½á€±á€¸á€•á€« -**",
             reply_markup=channel_keyboard("poster", channels)
         )
 
@@ -293,7 +306,7 @@ async def buttons(client, query):
         ch = load_channels()[idx]
         movie_states[ADMIN_ID] = {"poster": ch, "step": 1}
         await query.message.edit_text(
-            "🎥 **Video တင်မည့် Channel ကို ရွေးပါ -**",
+            "ðŸŽ¥ **Video á€á€„á€ºá€™á€Šá€·á€º Channel á€€á€­á€¯ á€›á€½á€±á€¸á€•á€« -**",
             reply_markup=channel_keyboard("video", channels)
         )
 
@@ -302,9 +315,9 @@ async def buttons(client, query):
         ch = load_channels()[idx]
         movie_states[ADMIN_ID]["video"] = ch
         movie_states[ADMIN_ID]["step"] = 2
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel", callback_data="back_home")]])
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("âŒ Cancel", callback_data="back_home")]])
         await query.message.edit_text(
-            "📤 **Video ဖိုင်ကို ဤ Bot ထံသို့ ပို့ပေးပါ (Send Video File) -**",
+            "ðŸ“¤ **Video á€–á€­á€¯á€„á€ºá€€á€­á€¯ á€¤ Bot á€‘á€¶á€žá€­á€¯á€· á€•á€­á€¯á€·á€•á€±á€¸á€•á€« (Send Video File) -**",
             reply_markup=kb
         )
 
@@ -326,9 +339,9 @@ async def handle_admin_text(client, message):
         if text not in channels:
             channels.append(text)
             save_channels(channels)
-            await message.reply(f"✅ **Source Channel အသစ်ထည့်ပြီးပါပြီ:** {text}", reply_markup=main_menu())
+            await message.reply(f"âœ… **Source Channel á€¡á€žá€…á€ºá€‘á€Šá€·á€ºá€•á€¼á€®á€¸á€•á€«á€•á€¼á€®:** {text}", reply_markup=main_menu())
         else:
-            await message.reply(f"⚠️ ယခု Channel မှာ စာရင်းထဲတွင် ရှိပြီးသား ဖြစ်ပါသည်။", reply_markup=main_menu())
+            await message.reply(f"âš ï¸ á€šá€á€¯ Channel á€™á€¾á€¬ á€…á€¬á€›á€„á€ºá€¸á€‘á€²á€á€½á€„á€º á€›á€¾á€­á€•á€¼á€®á€¸á€žá€¬á€¸ á€–á€¼á€…á€ºá€•á€«á€žá€Šá€ºá‹", reply_markup=main_menu())
         admin_input_states.pop(ADMIN_ID, None)
 
     elif state == "waiting_destination":
@@ -338,7 +351,7 @@ async def handle_admin_text(client, message):
             dest = text
         
         save_destination(dest)
-        await message.reply(f"✅ **ကျနော့် Channel (Destination) အသစ် ချိတ်ဆက်ပြီးပါပြီ:** {dest}", reply_markup=main_menu())
+        await message.reply(f"âœ… **á€€á€»á€”á€±á€¬á€·á€º Channel (Destination) á€¡á€žá€…á€º á€á€»á€­á€á€ºá€†á€€á€ºá€•á€¼á€®á€¸á€•á€«á€•á€¼á€®:** {dest}", reply_markup=main_menu())
         admin_input_states.pop(ADMIN_ID, None)
 
 
@@ -362,7 +375,8 @@ async def upload_video(client, message):
     movie_states[ADMIN_ID]["video_link"] = link
     movie_states[ADMIN_ID]["step"] = 3
 
-    await message.reply("✅ **Video တင်ပြီးပါပြီ။**\n📸 ဆက်လက်၍ **Poster ပုံ + Caption** ကို ပို့ပေးပါရှင်။")
+    await message.reply("âœ… **Video á€á€„á€ºá€•á€¼á€®á€¸á€•á€«á€•á€¼á€®á‹**
+ðŸ“¸ á€†á€€á€ºá€œá€€á€ºá **Poster á€•á€¯á€¶ + Caption** á€€á€­á€¯ á€•á€­á€¯á€·á€•á€±á€¸á€•á€«á€›á€¾á€„á€ºá‹")
 
 
 @bot_app.on_message(filters.photo & filters.user(ADMIN_ID))
@@ -376,12 +390,12 @@ async def upload_poster(client, message):
     if not video_link:
         return
 
-    caption = message.caption if message.caption else "🎬 New Movie"
-    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🎬 Watch / Download", url=video_link)]])
+    caption = message.caption if message.caption else "ðŸŽ¬ New Movie"
+    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("ðŸŽ¬ Watch / Download", url=video_link)]])
     await message.copy(channel, caption=caption, reply_markup=keyboard)
     
-    kb = InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Control Panel သို့ ပြန်ရန်", callback_data="back_home")]])
-    await message.reply("✅ **Movie တင်ခြင်း အောင်မြင်ပါသည်။**", reply_markup=kb)
+    kb = InlineKeyboardMarkup([[InlineKeyboardButton("ðŸ  Control Panel á€žá€­á€¯á€· á€•á€¼á€”á€ºá€›á€”á€º", callback_data="back_home")]])
+    await message.reply("âœ… **Movie á€á€„á€ºá€á€¼á€„á€ºá€¸ á€¡á€±á€¬á€„á€ºá€™á€¼á€„á€ºá€•á€«á€žá€Šá€ºá‹**", reply_markup=kb)
 
     movie_states.pop(ADMIN_ID, None)
 
@@ -419,7 +433,7 @@ async def auto_forward(client, message):
 # ==========================================
 
 async def main():
-    print("🚀 Bot Starting...")
+    print("ðŸš€ Bot Starting...")
     await start_web_server()
     await compose([bot_app, user_app])
 
