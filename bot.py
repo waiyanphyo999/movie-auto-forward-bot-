@@ -14,7 +14,7 @@ ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "waiyanphyo99")
 
 bot = Client("bulk_router_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-# System State Memory (Bulk Router)
+# System State Memory
 settings = {
     "channels": [],
     "current_index": 0,
@@ -44,7 +44,7 @@ async def start(client, message):
     if message.from_user.username == ADMIN_USERNAME:
         await message.reply_text(
             "🎬 **Multi-Channel Bulk Auto-Router Bot**\n\n"
-            "သူများ Channel မှ ဇာတ်ကားများ (သို့) ပို့စ်များကို အများကြီး တစ်ပြိုင်တည်း Forward လုပ်လိုက်ရုံဖြင့် သင်၏ Channel (၂၅) ခုသို့ တစ်လှည့်စီ အလိုအလျောက် (Round-Robin) ခွဲဝေတင်ပေးမည့် စနစ်ဖြစ်ပါသည်။",
+            "သူများ Channel မှ ပို့စ်များကို အများကြီး တစ်ပြိုင်တည်း Forward လုပ်လိုက်ရုံဖြင့် သင်၏ Channel (၂၅) ခုသို့ တစ်လှည့်စီ အလိုအလျောက် ခွဲဝေတင်ပေးမည်ဖြစ်ပြီး ဇာတ်ကားနာမည်များကို `#` (Hashtag) အလိုအလျောက် ထည့်ပေးမည့် စနစ်ဖြစ်ပါသည်။",
             reply_markup=get_menu()
         )
     else:
@@ -62,8 +62,7 @@ async def cb_handler(client, callback_query: CallbackQuery):
             "**ဥပမာ -**\n"
             "`@channel_A`\n"
             "`@channel_B`\n"
-            "`-100123456789`\n"
-            "`-100987654321`",
+            "`-100123456789`",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 နောက်သို့", callback_data="back")]])
         )
     
@@ -88,10 +87,10 @@ async def cb_handler(client, callback_query: CallbackQuery):
     elif data == "help":
         msg = (
             "ℹ️ **အသုံးပြုနည်း (Bulk Forward Mode)**\n\n"
-            "၁။ Channel ၂၅ ခုကို စာကြောင်းခွဲပြီး ထည့်ပါ။\n"
+            "၁။ Channel များကို စာကြောင်းခွဲပြီး ထည့်ပါ။\n"
             "၂။ `🚀 Auto Distribute` ကို နှိပ်၍ (✅ အလုပ်လုပ်နေသည်) ဖြစ်အောင် ဖွင့်ပါ။\n"
-            "၃။ သူများ Channel မှ ဇာတ်ကား ၅၀ သို့မဟုတ် ၁၀၀ ကို Select မှတ်ပြီး Bot ဆီသို့ တိုက်ရိုက် Forward ပို့လိုက်ပါ။\n"
-            "၄။ Bot မှ ပထမဇာတ်ကားကို Channel A သို့၊ ဒုတိယကို Channel B သို့ အစရှိသဖြင့် အလှည့်ကျ ချက်ချင်း လိုက်တင်ပေးသွားပါမည်။"
+            "၃။ သူများ Channel မှ ဇာတ်ကားများကို Select မှတ်ပြီး Bot ဆီသို့ တိုက်ရိုက် Forward ပို့လိုက်ပါ။\n"
+            "၄။ Bot မှ ဇာတ်ကားနာမည်များကို `#` (Hashtag) အလိုအလျောက် ထည့်သွင်းပေးပြီး Channel ၂၅ ခုသို့ အလှည့်ကျ ချက်ချင်း လိုက်တင်ပေးသွားပါမည်။"
         )
         await callback_query.message.edit_text(msg, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 နောက်သို့", callback_data="back")]]))
 
@@ -114,26 +113,41 @@ async def text_handler(client, message):
         return
 
 # ==========================================
-# 5. Bulk Auto-Router Engine
+# 5. Bulk Auto-Router & Hashtag Engine
 # ==========================================
-# Bot ဆီ ဝင်လာသမျှ (Forward လုပ်သမျှ) Media အားလုံးကို အလှည့်ကျ ပို့ပေးမည့် စနစ်
 @bot.on_message(filters.private & ~filters.command("start") & ~filters.text)
 async def auto_router(client, message):
     if settings["is_active"] and settings["channels"]:
         target_ch = settings["channels"][settings["current_index"]]
         
         try:
-            # Message ကို Target Channel သို့ Copy ကူးခြင်း (Forwarded from ကို အလိုအလျောက် ဖျောက်ပေးသည်)
-            await message.copy(chat_id=target_ch)
+            # မူလ Caption သို့မဟုတ် Text ကို ယူခြင်း
+            caption = message.caption if message.caption else ""
             
-            # နောက်ထပ် Channel တစ်ခုသို့ အလှည့်ရွှေ့ခြင်း (Round-Robin)
+            if caption:
+                # ဇာတ်ကားနာမည်တွင် Hashtag အလိုအလျောက် ထည့်သွင်းခြင်း (ဥပမာ - #MovieName)
+                # ပထမဆုံး စာကြောင်းကို ဇာတ်ကားနာမည်အဖြစ် ယူ၍ Hashtag ခံပေးခြင်း
+                lines = caption.split("\n")
+                movie_title = lines[0].replace("#", "").strip() # မူလ ပါပြီးသား # များကို ရှင်းထုတ်ခြင်း
+                hashtag_title = f"#{movie_title.replace(' ', '_')}" # နေရာလပ်များကို _ ဖြင့်အစားထိုး၍ Hashtag ဖန်တီးခြင်း
+                
+                # ကျန်တဲ့ စာသားများနှင့် ပေါင်းစပ်ခြင်း
+                lines[0] = f"🎬 {hashtag_title}"
+                new_caption = "\n".join(lines)
+                
+                # ပို့စ်တင်ခြင်း (Caption အသစ်ဖြင့်)
+                await message.copy(chat_id=target_ch, caption=new_caption)
+            else:
+                # စာသားမပါက ပုံ/ဗီဒီယို သက်သက် Copy ကူးပေးခြင်း
+                await message.copy(chat_id=target_ch)
+            
+            # နောက်ထပ် Channel သို့ အလှည့်ရွှေ့ခြင်း (Round-Robin)
             settings["current_index"] = (settings["current_index"] + 1) % len(settings["channels"])
             
-            # Forward အများကြီး လုပ်သည့်အခါ Telegram မှ Block မလုပ်စေရန် အနည်းငယ် စောင့်ိုင်းခြင်း
+            # Telegram FloodWait မဖြစ်စေရန် ခေတ္တစောင့်ခြင်း
             await asyncio.sleep(0.8) 
             
         except Exception as e:
-            # Channel မှားယွင်းခြင်း သို့မဟုတ် Admin မပေးထားလျှင် Error ကို Admin ထံ ပြပေးမည်
             await message.reply_text(f"❌ Error in {target_ch}: `{e}`")
 
 # ==========================================
