@@ -8,7 +8,7 @@ import google.generativeai as genai
 # ==========================================
 # 1. Configuration & Security (.env)
 # ==========================================
-API_ID = int(os.environ.get("API_ID", "0"))
+API_ID = int(os.environ.get("API_ID", " 6081621017"))
 API_HASH = os.environ.get("API_HASH", "")
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "waiyanphyo99")
